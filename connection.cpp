@@ -156,14 +156,26 @@ void Request::appendBuffer(QByteArray buffer) {
         return;
     }
 
-    if (!buffer.endsWith("\r\n")) {
+    /*if (!buffer.endsWith("\r\n")) {
+        return;
+    }*/
+
+    if (!readHeaders) {
+        //Append to the body
+        QByteArray dataToAppend = this->buffer.mid(dataRead);
+        body.append(dataToAppend);
+        dataRead += dataToAppend.length();
+
+        bodyRead +=  dataToAppend.length();
+        if (bodyRead >= headers.value("Content-Length").toInt()) {
+            processCompletedRequest();
+            stopProcess = true;
+        }
         return;
     }
 
     QString req = QString(this->buffer);
     QStringList lines = req.split("\r\n");
-
-    bool readHeaders = true;
     for (int i = 0; i < lines.count(); i++) {
         if (stopProcess) {
             break;
@@ -173,6 +185,9 @@ void Request::appendBuffer(QByteArray buffer) {
         if (line == "" && readHeaders) { //End of section
             if (method == "POST" || method == "PATCH") {
                 readHeaders = false;
+                dataRead += 2;
+                appendBuffer(QByteArray());
+                return;
             } else {
                 processCompletedRequest();
                 stopProcess = true;
@@ -197,6 +212,7 @@ void Request::appendBuffer(QByteArray buffer) {
                 }
             }
         }
+        dataRead += line.length() + 2;
     }
 }
 
@@ -246,95 +262,102 @@ void Request::processCompletedRequest() {
     }*/
 
     //Serve content
-    if (method != "GET") {
-        //Method Not Allowed
-        Response err;
-        err.statusCode = 405;
-
-        if (isHead) {
-            method = "HEAD";
-            err.contents.clear();
-            err.allowEmptyContents = true;
-        }
-
-        err.WriteToConnection(connection, path);
-        return;
-    }
-
-    if (path.endsWith("/")) {
-        if (path.contains('?')) {
-            path = path.left(path.indexOf("?"));
-        }
-
-        QDir dir(rootPath + path);
-        if (!dir.exists()) {
+    if (path == "/push") {
+        if (method != "POST") {
             Response err;
-            err.statusCode = 404;
+            err.statusCode = 405;
             err.WriteToConnection(connection, path);
-
-            if (isHead) {
-                method = "HEAD";
-                err.contents.clear();
-                err.allowEmptyContents = true;
-            }
-
             return;
         }
 
-        QFile listingFile(settings.value("packages/dirListingFile").toString());
-        if (!listingFile.exists()) {
-            Functions::err("Directory Listing file not present");
-            Response err;
-            err.statusCode = 500;
-            err.WriteToConnection(connection, path);
-
-            if (isHead) {
-                method = "HEAD";
-                err.contents.clear();
-                err.allowEmptyContents = true;
+        QString authentication = headers.value("Authorization");
+        if (!authentication.startsWith("Basic ")) {
+            if (method != "POST") {
+                Response err;
+                err.statusCode = 401;
+                err.WriteToConnection(connection, path);
+                return;
             }
+        }
 
+        QByteArray authBytes = QByteArray::fromBase64(authentication.mid(6).toUtf8());
+        if (authBytes != settings.value("user/auth").toString()) {
+            Response err;
+            err.statusCode = 401;
+            err.WriteToConnection(connection, path);
             return;
         }
 
-        listingFile.open(QFile::ReadOnly);
-        QString response = listingFile.readAll();
-        listingFile.close();
-
-        QDir::Filters filters = QDir::Dirs | QDir::Files | QDir::NoDot;
-        if (path == "/") filters |= QDir::NoDotDot;
-
-        QFileInfoList files = dir.entryInfoList(filters);
-        QString dirListingEntries;
-        for (QFileInfo file : files) {
-            dirListingEntries += "<a href=\"" + file.fileName() + (file.isDir() ? "/" : "") + "\">" + file.fileName() + "</a><br />";
+        if (!headers.contains("Filename")) {
+            Response err;
+            err.statusCode = 400;
+            err.WriteToConnection(connection, path);
+            return;
         }
 
-        response = response.arg(path, dirListingEntries);
+        QString filename = headers.value("Filename");
 
-        Response resp;
-        resp.statusCode = 200;
-        resp.contents = response.toUtf8();
-        resp.headers.insert("Content-Type", "text/html");
+        if (filename.endsWith("pkg.tar.xz")) {
+            //This is an Arch package
+            QDir dir(rootPath + "/arch/x86_64");
+            QFile file(dir.absoluteFilePath(filename));
 
-        if (isHead) {
-            method = "HEAD";
-            resp.contents.clear();
-            resp.allowEmptyContents = true;
+            if (!file.open(QFile::WriteOnly)) {
+                Response err;
+                err.statusCode = 500;
+                err.WriteToConnection(connection, path);
+                return;
+            }
+
+            //Write to the file
+            file.write(body);
+            file.close();
+
+            //Add to repository
+            if (headers.value("DoNotAdd", "False") == "False") {
+                QString repoFile = headers.value("Repository", "theapps") + ".db.tar.gz";
+
+                QProcess* process = new QProcess();
+                process->setWorkingDirectory(dir.absolutePath());
+                process->start("repo-add", QStringList() << repoFile << filename);
+                QObject::connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), [=](int exitCode, QProcess::ExitStatus exitStatus) {
+                    Response err;
+                    if (exitCode == 0) {
+                        err.statusCode = 200;
+                        err.contents = "{\"Status\": \"OK\"}";
+                        good("Updated " + filename + " in Arch Linux Repository " + repoFile);
+                    } else {
+                        err.statusCode = 500;
+
+                        QJsonObject errorObject;
+                        errorObject.insert("Status", "Error");
+                        errorObject.insert("Output", QString(process->readAll()));
+                        err.contents = QJsonDocument(errorObject).toJson();
+
+                        Functions::err("Failed to add " + filename + " to the Arch Linux repository " + repoFile);
+                    }
+                    err.WriteToConnection(connection, path);
+                });
+            } else {
+                //Invalid file
+                Response err;
+                err.statusCode = 200;
+                err.contents = "{\"Status\": \"OK\"}";
+                err.WriteToConnection(connection, path);
+            }
+            return;
+        } else {
+            //Invalid file
+            Response err;
+            err.statusCode = 400;
+            err.WriteToConnection(connection, path);
+            return;
         }
-
-        resp.WriteToConnection(connection, path);
-        return;
     } else {
-        if (path.contains('?')) {
-            path = path.left(path.indexOf("?"));
-        }
-
-        QFile file(rootPath + path);
-        if (!file.exists()) {
+        if (method != "GET") {
+            //Method Not Allowed
             Response err;
-            err.statusCode = 404;
-            err.WriteToConnection(connection, path);
+            err.statusCode = 405;
 
             if (isHead) {
                 method = "HEAD";
@@ -342,29 +365,115 @@ void Request::processCompletedRequest() {
                 err.allowEmptyContents = true;
             }
 
+            err.WriteToConnection(connection, path);
             return;
         }
 
-        file.open(QFile::ReadOnly);
-        QByteArray buffer = file.readAll();
-        file.close();
+        if (path.endsWith("/")) {
+            if (path.contains('?')) {
+                path = path.left(path.indexOf("?"));
+            }
 
-        QMimeDatabase mimeDb;
-        QMimeType mimetype = mimeDb.mimeTypeForFileNameAndData(file.fileName(), buffer);
+            QDir dir(rootPath + path);
+            if (!dir.exists()) {
+                Response err;
+                err.statusCode = 404;
 
-        Response resp;
-        resp.statusCode = 200;
-        resp.contents = buffer;
-        resp.headers.insert("Content-Type", mimetype.name());
+                if (isHead) {
+                    method = "HEAD";
+                    err.contents.clear();
+                    err.allowEmptyContents = true;
+                }
 
-        if (isHead) {
-            method = "HEAD";
-            resp.contents.clear();
-            resp.allowEmptyContents = true;
+                err.WriteToConnection(connection, path);
+                return;
+            }
+
+            QFile listingFile(settings.value("packages/dirListingFile").toString());
+            if (!listingFile.exists()) {
+                Functions::err("Directory Listing file not present");
+                Response err;
+                err.statusCode = 500;
+                err.WriteToConnection(connection, path);
+
+                if (isHead) {
+                    method = "HEAD";
+                    err.contents.clear();
+                    err.allowEmptyContents = true;
+                }
+
+                return;
+            }
+
+            listingFile.open(QFile::ReadOnly);
+            QString response = listingFile.readAll();
+            listingFile.close();
+
+            QDir::Filters filters = QDir::Dirs | QDir::Files | QDir::NoDot;
+            if (path == "/") filters |= QDir::NoDotDot;
+
+            QFileInfoList files = dir.entryInfoList(filters);
+            QString dirListingEntries;
+            for (QFileInfo file : files) {
+                dirListingEntries += "<a href=\"" + file.fileName() + (file.isDir() ? "/" : "") + "\">" + file.fileName() + "</a><br />";
+            }
+
+            response = response.arg(path, dirListingEntries);
+
+            Response resp;
+            resp.statusCode = 200;
+            resp.contents = response.toUtf8();
+            resp.headers.insert("Content-Type", "text/html");
+
+            if (isHead) {
+                method = "HEAD";
+                resp.contents.clear();
+                resp.allowEmptyContents = true;
+            }
+
+            resp.WriteToConnection(connection, path);
+            return;
+        } else {
+            if (path.contains('?')) {
+                path = path.left(path.indexOf("?"));
+            }
+
+            QFile file(rootPath + path);
+            if (!file.exists()) {
+                Response err;
+                err.statusCode = 404;
+                err.WriteToConnection(connection, path);
+
+                if (isHead) {
+                    method = "HEAD";
+                    err.contents.clear();
+                    err.allowEmptyContents = true;
+                }
+
+                return;
+            }
+
+            file.open(QFile::ReadOnly);
+            QByteArray buffer = file.readAll();
+            file.close();
+
+            QMimeDatabase mimeDb;
+            QMimeType mimetype = mimeDb.mimeTypeForFileNameAndData(file.fileName(), buffer);
+
+            Response resp;
+            resp.statusCode = 200;
+            resp.contents = buffer;
+            resp.headers.insert("Content-Type", mimetype.name());
+
+            if (isHead) {
+                method = "HEAD";
+                resp.contents.clear();
+                resp.allowEmptyContents = true;
+            }
+
+            resp.WriteToConnection(connection, path);
+            return;
         }
-
-        resp.WriteToConnection(connection, path);
-        return;
     }
     Response err;
     err.statusCode = 500;

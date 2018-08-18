@@ -27,6 +27,8 @@ struct Request {
     int bytesReceived = 0;
     Connection* connection;
     bool stopProcess = false;
+    bool readHeaders = true;
+    int dataRead = 0;
 
     QByteArray requestContents;
 };
