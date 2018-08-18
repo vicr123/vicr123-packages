@@ -291,12 +291,12 @@ void Request::processCompletedRequest() {
         if (!headers.contains("Filename")) {
             Response err;
             err.statusCode = 400;
+            err.contents = "{\"Status\": \"Error\",\"Error\":\"No Filename\"}";
             err.WriteToConnection(connection, path);
             return;
         }
 
         QString filename = headers.value("Filename");
-
         if (filename.endsWith("pkg.tar.xz")) {
             //This is an Arch package
             QDir dir(rootPath + "/arch/x86_64");
@@ -350,6 +350,7 @@ void Request::processCompletedRequest() {
             //Invalid file
             Response err;
             err.statusCode = 400;
+            err.contents = "{\"Status\": \"Error\",\"Error\":\"Invalid File\"}";
             err.WriteToConnection(connection, path);
             return;
         }
