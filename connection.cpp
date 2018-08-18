@@ -133,6 +133,9 @@ void Response::WriteToConnection(Connection *connection, QString path) const {
 }
 
 QString Connection::remoteAddress() {
+    if (req.headers.contains("CF-Connecting-IP")) {
+        return "[" + req.headers.value("CF-Connecting-IP") + "]";
+    }
     return "[" + peerAddress().toString() + "]";
 }
 
