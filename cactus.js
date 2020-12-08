@@ -14,7 +14,7 @@ module.exports = (config) => (/** @type {Express.Request} */ req, /** @type {Exp
         let chunks = [];
         tarLs.stdout.on('readable', () => {
             let chunk;
-            while (null !== (chunk = readable.read())) {
+            while (null !== (chunk = tarLs.stdout.read())) {
               chunks.push(chunk);
             }
         });
