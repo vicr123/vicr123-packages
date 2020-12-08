@@ -9,18 +9,19 @@ module.exports = (config) => (/** @type {Express.Request} */ req, /** @type {Exp
     if (fs.existsSync(pkgfile)) {
         //Find out how big the package file is
         const tarLs = spawn('tar', ['-tvO', `--file=${pkgfile}`, 'opt/cactus-recovery-media/rootfs.squashfs']);
-        tar.stdout.on('data', (data) => {
+        tarLs.stdout.on('data', (data) => {
             let size = data.toString().split(" ")[2];
             res.set('Content-Length', size);
         });
-
-        //Send over the package file
-        const tar = spawn('tar', ['-xO', `--file=${pkgfile}`, 'opt/cactus-recovery-media/rootfs.squashfs']);
-        tar.stdout.pipe(res, {
-            end: false
-        });
-        tar.on('close', (code) => {
-            res.end();
+        tarLs.on('close', (code) => {
+            //Send over the package file
+            const tar = spawn('tar', ['-xO', `--file=${pkgfile}`, 'opt/cactus-recovery-media/rootfs.squashfs']);
+            tar.stdout.pipe(res, {
+                end: false
+            });
+            tar.on('close', (code) => {
+                res.end();
+            });
         });
     }
     next();
