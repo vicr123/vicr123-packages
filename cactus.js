@@ -9,7 +9,7 @@ module.exports = (config) => async (/** @type {Express.Request} */ req, /** @typ
     let pkgfile = `${config.rootPath}/cactus/${req.params.arch}/cactus-recovery-media-${req.params.rootfile}-1-${req.params.arch}.tar`;
 
     //Sanitize user input
-    if (!["x86-64"].includes(req.params.arch) || !(req.params.rootfile == "latest" || /^\d{6}$/.test(req.params.rootfile))) {
+    if (!["x86_64"].includes(req.params.arch) || !(req.params.rootfile == "latest" || /^\d{6}$/.test(req.params.rootfile))) {
         next();
         return;
     }
