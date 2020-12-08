@@ -10,8 +10,16 @@ module.exports = (config) => (/** @type {Express.Request} */ req, /** @type {Exp
         //Find out how big the package file is
         const tarLs = spawn('tar', ['-tvO', `--file=${pkgfile}`, 'opt/cactus-recovery-media/rootfs.squashfs']);
         tarLs.stdout.setEncoding("utf-8");
+
+        let chunks = [];
+        tarLs.stdout.on('readable', () => {
+            let chunk;
+            while (null !== (chunk = readable.read())) {
+              chunks.push(chunk);
+            }
+        });
         tarLs.on('close', (code) => {
-            let size = tarLs.stdout.read().toString().split(" ")[2];
+            let size = chunks.join("").split(" ")[2];
             console.log("size: " + size);
             res.set('Content-Length', size);
 
