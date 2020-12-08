@@ -17,7 +17,7 @@ module.exports = (config) => async (/** @type {Express.Request} */ req, /** @typ
     if (req.params.rootfile == "latest") {
         //Discover the latest rootfs package
         // tar -tv --wildcards --file=cactus-core.db.tar.gz "cactus-recovery-media-????????-?/" --exclude "desc"
-        let { stdout: tarLs } = await execFile('tar', ['-tv', '--widcards', `--file=${config.rootPath}/cactus/${req.params.arch}/cactus-core.db.tar.gz`, "cactus-recovery-media-????????-?/", "--exclude", "desc"]);
+        let { stdout: tarLs } = await execFile('tar', ['-tv', '--wildcards', `--file=${config.rootPath}/cactus/${req.params.arch}/cactus-core.db.tar.gz`, "cactus-recovery-media-????????-?/", "--exclude", "desc"]);
         let filename = tarLs.split(" ").filter(part => part !== "")[5];
         filename = filename.substr(0, filename.length - 1); //Remove the trailing /
         pkgfile = `${config.rootPath}/cactus/${req.params.arch}/cactus-recovery-media-${filename}-1-${req.params.arch}.tar`;
