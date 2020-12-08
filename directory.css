@@ -1,0 +1,57 @@
+body {
+    margin: 0px;
+    background: rgb(40, 40, 40);
+    color: white;
+}
+
+a {
+    color: white;
+    text-decoration: none;
+}
+
+div.header {
+    font-size: 20;
+    padding: 9px;
+}
+
+div.fileEntry {
+    padding: 9px;
+}
+
+div.fileEntry:hover {
+    background-color: rgb(60, 60, 60);
+}
+
+div.fileEntry:active {
+    background-color: rgb(20, 20, 20);
+}
+
+hr {
+    margin: 0px;
+    border: none;
+    height: 1px;
+    background-color: white;
+}
+
+div.dirContainer {
+    display: flex;
+    flex-direction: row;
+}
+
+div.dirPart {
+    padding: 9px;
+    background-color: rgb(0, 0, 150);
+}
+
+div.dirPart:hover {
+    background-color: rgb(0, 0, 200);
+}
+
+div.dirPart:active {
+    background-color: rgb(0, 0, 100);
+}
+
+footer {
+    padding: 9px;
+    font-size: 10pt;
+}
