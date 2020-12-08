@@ -10,10 +10,9 @@ module.exports = (config) => async (/** @type {Express.Request} */ req, /** @typ
     let pkgfile = `${config.rootPath}/cactus/${req.params.arch}/cactus-recovery-media-${req.params.rootfile}-1-${req.params.arch}.tar`;
     if (fs.existsSync(pkgfile)) {
         //Find out how big the package file is
-        let { stdout: tarLs } = await execFile('tar', ['-tvO', `--file=${pkgfile}`, 'opt/cactus-recovery-media/rootfs.squashfs']);
+        let { stdout: tarLs } = await execFile('tar', ['-tv', `--file=${pkgfile}`, 'opt/cactus-recovery-media/rootfs.squashfs']);
 
         let size = tarLs.split(" ")[2];
-        console.log("size: " + size);
         res.set('Content-Length', size);
 
         //Send over the package file
