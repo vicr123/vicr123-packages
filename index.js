@@ -8,7 +8,8 @@ let config = JSON.parse(fs.readFileSync("config.json"));
 const cactusDetect = require('./cactus')(config);
 
 let app = express();
-app.use('/cactus/rootfs/:arch/:rootfile.squashfs', cactusDetect);
+app.use('/cactus/rootfs/:arch/:rootfile.squashfs', cactusDetect("opt/cactus-recovery-media/rootfs.squashfs"));
+app.use('/cactus/rootfs/:arch/:rootfile.squashfs.sig', cactusDetect("opt/cactus-recovery-media/rootfs.squashfs.sig"));
 app.use('/', express.static(config.rootPath));
 app.use('/', serveIndex(config.rootPath, {
     stylesheet: "directory.css",
