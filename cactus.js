@@ -26,7 +26,7 @@ module.exports = config => searchFile => async (/** @type {Express.Request} */ r
         //Find out how big the package file is
         let { stdout: tarLs } = await execFile('tar', ['-tv', `--file=${pkgfile}`, searchFile]);
 
-        let size = tarLs.split(" ")[2];
+        let size = tarLs.split(" ").filter(part => part !== "")[2];
         res.set('Content-Length', size);
 
         //Send over the package file
