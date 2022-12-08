@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/vicr123/vicr123-packages#readme",
   "dependencies": {
-    "express": "^4.17.1",
+    "express": "^4.18.2",
     "serve-index": "^1.9.1"
   }
 }
